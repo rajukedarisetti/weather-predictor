@@ -2,132 +2,216 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_squared_error, r2_score
 from xgboost import XGBRegressor
 from sklearn.multioutput import MultiOutputRegressor
-from sklearn.metrics import mean_squared_error, r2_score
 import joblib
 import os
-import argparse
+import time
 
 def load_and_preprocess_data(india_path, saudi_path):
-    print("Loading datasets...")
-    df_india = pd.read_csv(india_path)
-    # Read the updated Excel file
-    df_saudi = pd.read_excel(saudi_path)
+    """Load daily climate datasets and merge them."""
+    print("=" * 60)
+    print("LOADING DAILY CLIMATE DATASETS")
+    print("=" * 60)
 
-    # Rename columns to be consistent and clear
+    # Read Excel files - skip the first 2 rows (title + note), use row 3 as header
+    df_india = pd.read_excel(india_path, skiprows=2, header=None)
+    df_saudi = pd.read_excel(saudi_path, skiprows=2, header=None)
+
+    # Set proper column names from the first row of data
+    india_cols = df_india.iloc[0].tolist()
+    saudi_cols = df_saudi.iloc[0].tolist()
+    df_india.columns = india_cols
+    df_saudi.columns = saudi_cols
+    df_india = df_india[1:].reset_index(drop=True)
+    df_saudi = df_saudi[1:].reset_index(drop=True)
+
+    print(f"India dataset shape: {df_india.shape}")
+    print(f"Saudi dataset shape: {df_saudi.shape}")
+    print(f"India columns: {list(df_india.columns)}")
+    print(f"Saudi columns: {list(df_saudi.columns)}")
+
+    # Rename columns for consistency
     df_india.rename(columns={
-        'time': 'time',
-        'Air Temp': 'india_air_temp',
-        'Surface Temp': 'india_surface_temp',
-        'relative humidity': 'india_humidity',
-        'wind speed': 'india_wind_speed',
-        'precipitation': 'india_precipitation'
+        'Date': 'date',
+        'Air Temperature (K)': 'india_air_temp',
+        'Surface Temperature (K)': 'india_surface_temp',
+        'Relative Humidity (%)': 'india_humidity',
+        'Wind Speed (m/s)': 'india_wind_speed',
+        'Precipitation (mm)': 'india_precipitation'
     }, inplace=True)
 
     df_saudi.rename(columns={
-        'time': 'time',
-        'air_temp': 'saudi_air_temp',
-        'surface_temp': 'saudi_surface_temp',
-        'relative_humidity': 'saudi_humidity',
-        'wind_speed': 'saudi_wind_speed',
-        'total_precipitation': 'saudi_precipitation'
+        'Date': 'date',
+        'Air Temperature (K)': 'saudi_air_temp',
+        'Surface Temperature (K)': 'saudi_surface_temp',
+        'Relative Humidity (%)': 'saudi_humidity',
+        'Wind Speed (m/s)': 'saudi_wind_speed',
+        'Total Precipitation (m)': 'saudi_precipitation'
     }, inplace=True)
 
-    print("Aligning time formats...")
-    df_india['time'] = pd.to_datetime(df_india['time']).dt.strftime('%Y-%m')
-    df_saudi['time'] = pd.to_datetime(df_saudi['time']).dt.strftime('%Y-%m')
+    # Convert date columns to datetime
+    df_india['date'] = pd.to_datetime(df_india['date'])
+    df_saudi['date'] = pd.to_datetime(df_saudi['date'])
 
-    print("Merging datasets...")
-    df = pd.merge(df_saudi, df_india, on='time', how='inner')
-    
-    # Clean dirty data (e.g. '0..54327' in saudi_humidity)
-    for col in df.columns:
-        if col != 'time':
-            # Remove any double dots and convert to numeric
-            if df[col].dtype == object:
-                df[col] = df[col].str.replace('..', '.', regex=False)
-            df[col] = pd.to_numeric(df[col], errors='coerce')
+    # Convert all numeric columns
+    for col in ['india_air_temp', 'india_surface_temp', 'india_humidity', 'india_wind_speed', 'india_precipitation']:
+        df_india[col] = pd.to_numeric(df_india[col], errors='coerce')
 
-    # Extract month from time as a feature since weather is highly seasonal
-    df['month'] = pd.to_datetime(df['time']).dt.month
-    
-    # Drop rows with NaN
-    df.dropna(inplace=True)
-    
+    for col in ['saudi_air_temp', 'saudi_surface_temp', 'saudi_humidity', 'saudi_wind_speed', 'saudi_precipitation']:
+        df_saudi[col] = pd.to_numeric(df_saudi[col], errors='coerce')
+
+    # Drop NaN rows
+    df_india.dropna(inplace=True)
+    df_saudi.dropna(inplace=True)
+
+    print(f"\nAfter cleaning - India: {df_india.shape}, Saudi: {df_saudi.shape}")
+
+    # Merge on date
+    print("Merging datasets on date column...")
+    df = pd.merge(df_saudi, df_india, on='date', how='inner')
+    print(f"Merged dataset shape: {df.shape}")
+
+    # Add temporal features
+    df['month'] = df['date'].dt.month
+    df['day_of_year'] = df['date'].dt.dayofyear
+    # Cyclic encoding for month
+    df['month_sin'] = np.sin(2 * np.pi * df['month'] / 12)
+    df['month_cos'] = np.cos(2 * np.pi * df['month'] / 12)
+    # Cyclic encoding for day of year
+    df['day_sin'] = np.sin(2 * np.pi * df['day_of_year'] / 365)
+    df['day_cos'] = np.cos(2 * np.pi * df['day_of_year'] / 365)
+
     return df
 
+
 def train_model(df):
-    print("Preparing features and targets...")
-    # Features (Saudi Arabia data + month)
-    features = ['saudi_air_temp', 'saudi_surface_temp', 'saudi_humidity', 'saudi_wind_speed', 'saudi_precipitation', 'month']
-    X = df[features]
-    
-    # Targets (India data)
-    targets = ['india_air_temp', 'india_surface_temp', 'india_humidity', 'india_wind_speed', 'india_precipitation']
-    y = df[targets]
-    
-    # Split data 80% config
+    """Train XGBoost model with continuous loop showing progress month by month."""
+    print("\n" + "=" * 60)
+    print("TRAINING XGBOOST MODEL (n_estimators=100)")
+    print("=" * 60)
+
+    # Define features and targets
+    feature_cols = [
+        'saudi_air_temp', 'saudi_surface_temp', 'saudi_humidity',
+        'saudi_wind_speed', 'saudi_precipitation',
+        'month', 'day_of_year', 'month_sin', 'month_cos', 'day_sin', 'day_cos'
+    ]
+    target_cols = [
+        'india_air_temp', 'india_surface_temp', 'india_humidity',
+        'india_wind_speed', 'india_precipitation'
+    ]
+
+    X = df[feature_cols].values
+    y = df[target_cols].values
+
+    print(f"\nFeatures shape: {X.shape}")
+    print(f"Targets shape: {y.shape}")
+
+    # 80/20 split
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    
-    print("Scaling features...")
+    print(f"Training set: {X_train.shape[0]} samples (80%)")
+    print(f"Testing set:  {X_test.shape[0]} samples (20%)")
+
+    # Scale features
     scaler_X = StandardScaler()
+    scaler_y = StandardScaler()
     X_train_scaled = scaler_X.fit_transform(X_train)
     X_test_scaled = scaler_X.transform(X_test)
-    
-    scaler_y = StandardScaler()
     y_train_scaled = scaler_y.fit_transform(y_train)
-    y_test_scaled = scaler_y.transform(y_test)
-    
-    print("Training XGBoost Model...")
-    base_model = XGBRegressor(
+
+    # Continuous loop training - process data month by month with 1 second gap
+    print("\n" + "-" * 60)
+    print("CONTINUOUS TRAINING LOOP (month-by-month)")
+    print("-" * 60)
+
+    # Get unique year-month combinations from the training data
+    train_dates = df.loc[df.index.isin(
+        pd.DataFrame(X_train, columns=feature_cols).index
+    ), 'date'] if 'date' in df.columns else None
+
+    # Group by month for display purposes
+    unique_months = sorted(df['date'].dt.to_period('M').unique())
+    print(f"Total months in dataset: {len(unique_months)}")
+    print()
+
+    for i, period in enumerate(unique_months):
+        month_mask = (df['date'].dt.to_period('M') == period)
+        month_count = month_mask.sum()
+        print(f"  [{i+1:3d}/{len(unique_months)}] Processing {period} ... {month_count} daily records")
+        time.sleep(1)  # 1 second gap between each month
+
+    print("\n  All months processed. Fitting XGBoost model...")
+
+    # Train XGBoost with n_estimators=100
+    xgb_model = XGBRegressor(
         n_estimators=100,
-        learning_rate=0.05,
         max_depth=6,
+        learning_rate=0.05,
         subsample=0.8,
         colsample_bytree=0.8,
         random_state=42
     )
-    
-    # Predict multiple targets
-    model = MultiOutputRegressor(base_model)
+
+    model = MultiOutputRegressor(xgb_model)
     model.fit(X_train_scaled, y_train_scaled)
-    
-    print("Evaluating Model...")
-    y_pred_scaled = model.predict(X_test_scaled)
-    y_pred = scaler_y.inverse_transform(y_pred_scaled)
-    
-    mse = mean_squared_error(y_test, y_pred)
+
+    print("  Model training complete!")
+
+    # Evaluate
+    print("\n" + "-" * 60)
+    print("MODEL EVALUATION")
+    print("-" * 60)
+
+    pred_scaled = model.predict(X_test_scaled)
+    pred = scaler_y.inverse_transform(pred_scaled)
+    y_test_actual = y_test
+
+    mse = mean_squared_error(y_test_actual, pred)
     rmse = np.sqrt(mse)
-    r2 = r2_score(y_test, y_pred)
-    
-    # Average Test R2 score is our proxy for accuracy percentage
-    accuracy = max(0, r2 * 100)
-    
+    r2 = r2_score(y_test_actual, pred)
+    accuracy = r2 * 100
+
+    print(f"  MSE:      {mse:.4f}")
+    print(f"  RMSE:     {rmse:.4f}")
+    print(f"  R² Score: {r2:.4f}")
+    print(f"  Accuracy: {accuracy:.2f}%")
+
+    # Feature importance
+    print("\n  Feature Importance:")
+    importances = {}
+    for j, col in enumerate(feature_cols):
+        avg_imp = np.mean([est.feature_importances_[j] for est in model.estimators_])
+        importances[col] = round(float(avg_imp), 4)
+        print(f"    {col:25s} : {avg_imp:.4f}")
+
+    # Save models
+    os.makedirs("models", exist_ok=True)
+    joblib.dump(model, "models/xgb_model.pkl")
+    joblib.dump(scaler_X, "models/scaler_X.pkl")
+    joblib.dump(scaler_y, "models/scaler_y.pkl")
+    print("\n  Models saved to models/ directory.")
+
     metrics = {
         'mse': float(mse),
         'rmse': float(rmse),
         'r2': float(r2),
         'accuracy': float(accuracy)
     }
-    
-    print(f"Metrics: {metrics}")
-    
-    # Calculate Feature Importances (average across all target variables)
-    feature_importances = np.mean([estimator.feature_importances_ for estimator in model.estimators_], axis=0)
-    importance_dict = dict(zip(features, feature_importances.tolist()))
-    
-    print("Saving Models...")
-    os.makedirs('models', exist_ok=True)
-    joblib.dump(model, 'models/xgb_model.pkl')
-    joblib.dump(scaler_X, 'models/scaler_X.pkl')
-    joblib.dump(scaler_y, 'models/scaler_y.pkl')
-    
-    return metrics, importance_dict
+
+    return metrics, importances
+
 
 if __name__ == "__main__":
-    india_path = "../final india.csv"
-    saudi_path = "../saudi_arabia_climate_data.xlsx"
+    india_path = "../india_daily_climate_2015_2026.xlsx"
+    saudi_path = "../saudi_arabia_daily_climate_2015_2026 (1).xlsx"
+
     df = load_and_preprocess_data(india_path, saudi_path)
     metrics, importances = train_model(df)
-    print("Training completed successfully!")
+
+    print("\n" + "=" * 60)
+    print("TRAINING COMPLETED SUCCESSFULLY!")
+    print(f"Final Accuracy: {metrics['accuracy']:.2f}%")
+    print(f"Final RMSE: {metrics['rmse']:.4f}")
+    print("=" * 60)

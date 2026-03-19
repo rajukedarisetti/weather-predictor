@@ -1,0 +1,26 @@
+==================================================
+TESTING BACKEND API ENDPOINTS
+==================================================
+
+1. GET /api/locations
+   Status: 200
+   States count: 36
+   First 3: ['Andaman and Nicobar Islands', 'Andhra Pradesh', 'Arunachal Pradesh']
+
+2. GET /api/model_info
+   Status: 200
+   Accuracy: 96.32%
+   RMSE: 6.25
+
+3. POST /api/predict
+   Status: 200
+   Condition: Rainy
+   Temperature: 19.0°C
+   Humidity: 36.6%
+   Wind Speed: 17.8 km/h
+   AQI: 55
+   Hourly forecasts: 8 time slots
+
+==================================================
+ALL TESTS COMPLETE
+==================================================
