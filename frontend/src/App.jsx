@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
   CloudSun, CloudRain, CloudLightning, Sun, Wind, Droplets, 
-  Thermometer, Activity, MapPin, Calendar, CheckCircle2, ChevronDown
+  Thermometer, Activity, MapPin, Calendar, CheckCircle2, ChevronDown,
+  TrendingUp, TrendingDown, Snowflake, CloudDrizzle
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -23,7 +24,7 @@ ChartJS.register(
   Title, Tooltip, Legend, Filler
 );
 
-const API_URL = "http://localhost:8001/api";
+const API_URL = import.meta.env.PROD ? "/api" : "http://localhost:8001/api";
 
 function App() {
   const [activeTab, setActiveTab] = useState('forecast'); // 'forecast' | 'model'
@@ -35,6 +36,7 @@ function App() {
   
   const [weatherData, setWeatherData] = useState(null);
   const [modelInfo, setModelInfo] = useState(null);
+  const [seasonalTrends, setSeasonalTrends] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -47,6 +49,11 @@ function App() {
     // Fetch model info initially
     axios.get(`${API_URL}/model_info`)
       .then(res => setModelInfo(res.data))
+      .catch(err => console.error(err));
+
+    // Fetch seasonal trends
+    axios.get(`${API_URL}/seasonal_trends`)
+      .then(res => setSeasonalTrends(res.data))
       .catch(err => console.error(err));
   }, []);
 
@@ -250,6 +257,104 @@ function App() {
     );
   };
 
+  const renderSeasonalTab = () => {
+    if (!seasonalTrends) return <div className="glass-panel">Loading seasonal trends...</div>;
+
+    const seasonIcons = {
+      Summer: <Sun size={28} color="#fbbf24" />,
+      Winter: <Snowflake size={28} color="#60a5fa" />,
+      Rainy: <CloudDrizzle size={28} color="#34d399" />
+    };
+    const seasonColors = {
+      Summer: '#fbbf24',
+      Winter: '#60a5fa',
+      Rainy: '#34d399'
+    };
+
+    return (
+      <div className="seasonal-content">
+        <div className="seasonal-cards-grid">
+          {['Summer', 'Winter', 'Rainy'].map(season => {
+            const data = seasonalTrends[season];
+            if (!data) return null;
+            const isIncreasing = data.temp_trend === 'increasing';
+            return (
+              <div key={season} className="glass-panel seasonal-card">
+                <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.2rem'}}>
+                  {seasonIcons[season]}
+                  <h3 style={{margin: 0}}>{season} Season</h3>
+                </div>
+
+                <div className="trend-row">
+                  <span className="trend-label">Temperature</span>
+                  <span className={`trend-badge ${isIncreasing ? 'trend-up' : 'trend-down'}`}>
+                    {isIncreasing ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                    {isIncreasing ? '+' : ''}{data.temp_total_change}°C
+                  </span>
+                </div>
+                <div className="trend-detail">{Math.abs(data.temp_slope_per_year).toFixed(3)}°C / year</div>
+
+                <div className="trend-row">
+                  <span className="trend-label">Precipitation</span>
+                  <span className={`trend-badge ${data.precip_trend === 'increasing' ? 'trend-up' : 'trend-down'}`}>
+                    {data.precip_trend === 'increasing' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                    {data.precip_trend}
+                  </span>
+                </div>
+
+                <div className="trend-row">
+                  <span className="trend-label">Humidity</span>
+                  <span className={`trend-badge ${data.humid_trend === 'increasing' ? 'trend-up' : 'trend-down'}`}>
+                    {data.humid_trend === 'increasing' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                    {data.humid_trend}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Yearly Temperature Chart */}
+        <div className="glass-panel" style={{marginTop: '2rem'}}>
+          <h3 style={{marginBottom: '1rem'}}>Yearly Average Temperature by Season (2015-2026)</h3>
+          <div className="chart-container">
+            <Line
+              data={{
+                labels: seasonalTrends.Summer?.yearly_data?.map(d => d.year) || [],
+                datasets: ['Summer', 'Winter', 'Rainy'].map(season => ({
+                  label: season,
+                  data: seasonalTrends[season]?.yearly_data?.map(d => d.avg_temp) || [],
+                  borderColor: seasonColors[season],
+                  backgroundColor: seasonColors[season] + '33',
+                  tension: 0.4,
+                  fill: false,
+                  pointRadius: 4
+                }))
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                  y: {
+                    title: { display: true, text: 'Temperature (°C)', color: '#94a3b8' },
+                    grid: { color: 'rgba(255,255,255,0.1)' }
+                  },
+                  x: {
+                    title: { display: true, text: 'Year', color: '#94a3b8' },
+                    grid: { color: 'rgba(255,255,255,0.1)' }
+                  }
+                },
+                plugins: {
+                  legend: { labels: { color: '#e2e8f0' } }
+                }
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="app-container">
       <header>
@@ -333,9 +438,17 @@ function App() {
             >
               Model Information
             </button>
+            <button 
+              className={`tab ${activeTab === 'seasonal' ? 'active' : ''}`}
+              onClick={() => setActiveTab('seasonal')}
+            >
+              Seasonal Trends
+            </button>
           </div>
 
-          {activeTab === 'forecast' ? renderForecastTab() : renderModelTab()}
+          {activeTab === 'forecast' && renderForecastTab()}
+          {activeTab === 'model' && renderModelTab()}
+          {activeTab === 'seasonal' && renderSeasonalTab()}
         </div>
       </div>
     </div>

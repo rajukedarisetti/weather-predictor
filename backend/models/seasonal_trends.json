@@ -1,0 +1,251 @@
+{
+  "Summer": {
+    "temp_slope_per_year": -0.9212,
+    "temp_total_change": -10.13,
+    "temp_trend": "decreasing",
+    "precip_slope_per_year": -4.929978,
+    "precip_total_change": -54.2298,
+    "precip_trend": "decreasing",
+    "humid_slope_per_year": -0.024894,
+    "humid_total_change": -0.2738,
+    "humid_trend": "decreasing",
+    "yearly_data": [
+      {
+        "year": 2015,
+        "avg_temp": 31.1,
+        "avg_precipitation": 88.7119,
+        "avg_humidity": 0.7152
+      },
+      {
+        "year": 2016,
+        "avg_temp": 31.97,
+        "avg_precipitation": 46.8365,
+        "avg_humidity": 0.713
+      },
+      {
+        "year": 2017,
+        "avg_temp": 31.48,
+        "avg_precipitation": 99.4459,
+        "avg_humidity": 0.718
+      },
+      {
+        "year": 2018,
+        "avg_temp": 31.96,
+        "avg_precipitation": 60.315,
+        "avg_humidity": 0.7316
+      },
+      {
+        "year": 2019,
+        "avg_temp": 31.48,
+        "avg_precipitation": 58.4106,
+        "avg_humidity": 0.7146
+      },
+      {
+        "year": 2020,
+        "avg_temp": 30.91,
+        "avg_precipitation": 83.3779,
+        "avg_humidity": 0.7114
+      },
+      {
+        "year": 2021,
+        "avg_temp": 31.35,
+        "avg_precipitation": 54.3008,
+        "avg_humidity": 0.7086
+      },
+      {
+        "year": 2022,
+        "avg_temp": 32.03,
+        "avg_precipitation": 63.4892,
+        "avg_humidity": 0.7261
+      },
+      {
+        "year": 2023,
+        "avg_temp": 30.19,
+        "avg_precipitation": 109.4076,
+        "avg_humidity": 0.7024
+      },
+      {
+        "year": 2024,
+        "avg_temp": 31.91,
+        "avg_precipitation": 64.553,
+        "avg_humidity": 0.6944
+      },
+      {
+        "year": 2025,
+        "avg_temp": 18.51,
+        "avg_precipitation": 0.0007,
+        "avg_humidity": 0.3722
+      },
+      {
+        "year": 2026,
+        "avg_temp": 18.51,
+        "avg_precipitation": 0.0007,
+        "avg_humidity": 0.3722
+      }
+    ]
+  },
+  "Winter": {
+    "temp_slope_per_year": -0.178,
+    "temp_total_change": -1.96,
+    "temp_trend": "decreasing",
+    "precip_slope_per_year": -0.410447,
+    "precip_total_change": -4.5149,
+    "precip_trend": "decreasing",
+    "humid_slope_per_year": 0.001677,
+    "humid_total_change": 0.0184,
+    "humid_trend": "increasing",
+    "yearly_data": [
+      {
+        "year": 2015,
+        "avg_temp": 20.84,
+        "avg_precipitation": 4.3967,
+        "avg_humidity": 0.371
+      },
+      {
+        "year": 2016,
+        "avg_temp": 21.5,
+        "avg_precipitation": 3.4006,
+        "avg_humidity": 0.3627
+      },
+      {
+        "year": 2017,
+        "avg_temp": 20.84,
+        "avg_precipitation": 9.5888,
+        "avg_humidity": 0.3588
+      },
+      {
+        "year": 2018,
+        "avg_temp": 21.21,
+        "avg_precipitation": 2.4093,
+        "avg_humidity": 0.363
+      },
+      {
+        "year": 2019,
+        "avg_temp": 19.18,
+        "avg_precipitation": 11.1538,
+        "avg_humidity": 0.441
+      },
+      {
+        "year": 2020,
+        "avg_temp": 19.63,
+        "avg_precipitation": 5.7418,
+        "avg_humidity": 0.4018
+      },
+      {
+        "year": 2021,
+        "avg_temp": 20.76,
+        "avg_precipitation": 5.9907,
+        "avg_humidity": 0.4279
+      },
+      {
+        "year": 2022,
+        "avg_temp": 20.59,
+        "avg_precipitation": 2.9514,
+        "avg_humidity": 0.4379
+      },
+      {
+        "year": 2023,
+        "avg_temp": 21.13,
+        "avg_precipitation": 7.8962,
+        "avg_humidity": 0.3969
+      },
+      {
+        "year": 2024,
+        "avg_temp": 20.39,
+        "avg_precipitation": 3.5288,
+        "avg_humidity": 0.3894
+      },
+      {
+        "year": 2025,
+        "avg_temp": 18.5,
+        "avg_precipitation": 0.1019,
+        "avg_humidity": 0.37
+      },
+      {
+        "year": 2026,
+        "avg_temp": 18.51,
+        "avg_precipitation": 0.0007,
+        "avg_humidity": 0.3722
+      }
+    ]
+  },
+  "Rainy": {
+    "temp_slope_per_year": -0.4798,
+    "temp_total_change": -4.8,
+    "temp_trend": "decreasing",
+    "precip_slope_per_year": -0.278958,
+    "precip_total_change": -2.7896,
+    "precip_trend": "decreasing",
+    "humid_slope_per_year": -0.011272,
+    "humid_total_change": -0.1127,
+    "humid_trend": "decreasing",
+    "yearly_data": [
+      {
+        "year": 2015,
+        "avg_temp": 28.72,
+        "avg_precipitation": 70.4237,
+        "avg_humidity": 0.6579
+      },
+      {
+        "year": 2016,
+        "avg_temp": 28.37,
+        "avg_precipitation": 92.2211,
+        "avg_humidity": 0.6901
+      },
+      {
+        "year": 2017,
+        "avg_temp": 28.51,
+        "avg_precipitation": 96.8899,
+        "avg_humidity": 0.6945
+      },
+      {
+        "year": 2018,
+        "avg_temp": 28.73,
+        "avg_precipitation": 67.1528,
+        "avg_humidity": 0.6537
+      },
+      {
+        "year": 2019,
+        "avg_temp": 28.56,
+        "avg_precipitation": 162.0021,
+        "avg_humidity": 0.728
+      },
+      {
+        "year": 2020,
+        "avg_temp": 28.32,
+        "avg_precipitation": 162.6249,
+        "avg_humidity": 0.7042
+      },
+      {
+        "year": 2021,
+        "avg_temp": 28.64,
+        "avg_precipitation": 120.7525,
+        "avg_humidity": 0.7133
+      },
+      {
+        "year": 2022,
+        "avg_temp": 27.17,
+        "avg_precipitation": 144.1013,
+        "avg_humidity": 0.6917
+      },
+      {
+        "year": 2023,
+        "avg_temp": 28.46,
+        "avg_precipitation": 85.6367,
+        "avg_humidity": 0.6983
+      },
+      {
+        "year": 2024,
+        "avg_temp": 28.74,
+        "avg_precipitation": 152.8566,
+        "avg_humidity": 0.719
+      },
+      {
+        "year": 2025,
+        "avg_temp": 18.51,
+        "avg_precipitation": 0.0007,
+        "avg_humidity": 0.3722
+      }
+    ]
+  }
+}

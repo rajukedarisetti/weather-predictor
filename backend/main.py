@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import joblib
 import pandas as pd
@@ -14,6 +15,15 @@ app = FastAPI(title="Indian Weather Predictor API")
 # Resolve paths relative to this script's directory
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(BASE_DIR)
+
+# Root route to serve the frontend
+@app.get("/", response_class=HTMLResponse)
+async def serve_frontend():
+    standalone_path = os.path.join(PROJECT_DIR, "standalone_weather_app.html")
+    if os.path.exists(standalone_path):
+        with open(standalone_path, "r", encoding="utf-8") as f:
+            return f.read()
+    return "<h1>Frontend build not found. Please run npm build first.</h1>"
 
 # Setup CORS for Frontend
 app.add_middleware(
@@ -236,6 +246,17 @@ def get_model_info():
             "day_cos": 0.04
         }
     }
+
+
+@app.get("/api/seasonal_trends")
+def get_seasonal_trends():
+    """Return seasonal trend analysis data."""
+    trends_path = os.path.join(BASE_DIR, "models/seasonal_trends.json")
+    if os.path.exists(trends_path):
+        import json
+        with open(trends_path, "r") as f:
+            return json.load(f)
+    return {"error": "Seasonal trends not computed yet. Run ml_pipeline.py first."}
 
 
 @app.get("/api/locations")

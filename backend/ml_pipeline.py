@@ -203,12 +203,113 @@ def train_model(df):
     return metrics, importances
 
 
+def compute_seasonal_trends(df):
+    """Analyze how Summer, Winter, and Rainy seasons are changing year-over-year."""
+    import json
+
+    print("\n" + "=" * 60)
+    print("SEASONAL TREND ANALYSIS")
+    print("=" * 60)
+
+    df = df.copy()
+    df['year'] = df['date'].dt.year
+    df['month'] = df['date'].dt.month
+
+    # Convert Kelvin to Celsius for analysis
+    df['india_temp_c'] = df['india_air_temp'] - 273.15
+
+    # Define Indian seasons by month
+    # Summer: March-June | Rainy/Monsoon: July-October | Winter: November-February
+    def get_season(month):
+        if month in [3, 4, 5, 6]:
+            return 'Summer'
+        elif month in [7, 8, 9, 10]:
+            return 'Rainy'
+        else:
+            return 'Winter'
+
+    df['season'] = df['month'].apply(get_season)
+
+    trends = {}
+
+    for season in ['Summer', 'Winter', 'Rainy']:
+        print(f"\n  Analyzing {season} season...")
+        season_df = df[df['season'] == season]
+
+        # Yearly averages
+        yearly = season_df.groupby('year').agg({
+            'india_temp_c': 'mean',
+            'india_precipitation': 'mean',
+            'india_humidity': 'mean',
+            'india_wind_speed': 'mean'
+        }).reset_index()
+
+        years = yearly['year'].values
+        temps = yearly['india_temp_c'].values
+        precips = yearly['india_precipitation'].values
+        humids = yearly['india_humidity'].values
+
+        # Calculate linear trend (slope per year)
+        if len(years) >= 2:
+            temp_slope = float(np.polyfit(years, temps, 1)[0])
+            precip_slope = float(np.polyfit(years, precips, 1)[0])
+            humid_slope = float(np.polyfit(years, humids, 1)[0])
+        else:
+            temp_slope = 0.0
+            precip_slope = 0.0
+            humid_slope = 0.0
+
+        # Total change over the full period
+        total_years = float(years[-1] - years[0]) if len(years) >= 2 else 1.0
+        temp_total_change = temp_slope * total_years
+        precip_total_change = precip_slope * total_years
+        humid_total_change = humid_slope * total_years
+
+        # Year-by-year data for charts
+        yearly_data = []
+        for _, row in yearly.iterrows():
+            yearly_data.append({
+                "year": int(row['year']),
+                "avg_temp": round(float(row['india_temp_c']), 2),
+                "avg_precipitation": round(float(row['india_precipitation']), 4),
+                "avg_humidity": round(float(row['india_humidity']), 4)
+            })
+
+        trend_direction = "increasing" if temp_slope > 0 else "decreasing"
+
+        trends[season] = {
+            "temp_slope_per_year": round(temp_slope, 4),
+            "temp_total_change": round(temp_total_change, 2),
+            "temp_trend": trend_direction,
+            "precip_slope_per_year": round(precip_slope, 6),
+            "precip_total_change": round(precip_total_change, 4),
+            "precip_trend": "increasing" if precip_slope > 0 else "decreasing",
+            "humid_slope_per_year": round(humid_slope, 6),
+            "humid_total_change": round(humid_total_change, 4),
+            "humid_trend": "increasing" if humid_slope > 0 else "decreasing",
+            "yearly_data": yearly_data
+        }
+
+        print(f"    Temperature: {trend_direction} by {abs(temp_total_change):.2f}°C over {total_years:.0f} years")
+        print(f"    Precipitation: {'increasing' if precip_slope > 0 else 'decreasing'}")
+        print(f"    Humidity: {'increasing' if humid_slope > 0 else 'decreasing'}")
+
+    # Save trends to JSON
+    os.makedirs("models", exist_ok=True)
+    with open("models/seasonal_trends.json", "w") as f:
+        json.dump(trends, f, indent=2)
+    print("\n  Seasonal trends saved to models/seasonal_trends.json")
+
+    return trends
+
+
 if __name__ == "__main__":
     india_path = "../india_daily_climate_2015_2026.xlsx"
     saudi_path = "../saudi_arabia_daily_climate_2015_2026 (1).xlsx"
 
     df = load_and_preprocess_data(india_path, saudi_path)
     metrics, importances = train_model(df)
+    trends = compute_seasonal_trends(df)
 
     print("\n" + "=" * 60)
     print("TRAINING COMPLETED SUCCESSFULLY!")
