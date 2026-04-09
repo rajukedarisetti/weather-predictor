@@ -11,8 +11,12 @@ import os
 import math
 import requests
 from datetime import timedelta
+from dotenv import load_dotenv
 
-OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "e2caa5e4c3008fcf3308cc55d796c192")
+# Load environment variables
+load_dotenv()
+
+OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 
 app = FastAPI(title="Indian Weather Predictor API")
 
