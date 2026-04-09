@@ -9,6 +9,10 @@ import numpy as np
 from datetime import datetime
 import os
 import math
+import requests
+from datetime import timedelta
+
+OPENWEATHER_API_KEY = "e2caa5e4c3008fcf3308cc55d796c192"
 
 app = FastAPI(title="Indian Weather Predictor API")
 
@@ -87,15 +91,71 @@ def kelvin_to_celsius(k):
 
 
 def get_condition(temp_c, precip, humid, wind):
-    """Classify weather condition based on predicted parameters."""
-    if precip > 5 and wind > 6:
+    """Classify weather condition based on predicted parameters with fixed thresholds."""
+    if precip > 15 and wind > 8:
         return "Thunderstorm"
-    elif precip > 2 or (humid > 0.7 and precip > 0.5):
+    elif precip > 5 or (humid > 0.85 and precip > 1):
         return "Rainy"
-    elif humid > 0.65 or precip > 0.1:
+    elif humid > 0.72 or precip > 0.5:
         return "Cloudy"
     else:
         return "Sunny"
+
+
+def get_weather_from_api(city, date_obj):
+    """Fetch weather data from OpenWeather API if date is within 5 days."""
+    try:
+        # 1. Geocoding
+        geo_url = f"http://api.openweathermap.org/geo/1.0/direct?q={city},IN&limit=1&appid={OPENWEATHER_API_KEY}"
+        geo_resp = requests.get(geo_url, timeout=5).json()
+        if not geo_resp:
+            return None
+        lat = geo_resp[0]['lat']
+        lon = geo_resp[0]['lon']
+
+        today = datetime.now().date()
+        target = date_obj.date()
+        diff_days = (target - today).days
+
+        # 2. Fetch Data
+        if 0 <= diff_days <= 5:
+            # use 5 Day / 3 Hour Forecast
+            forecast_url = f"http://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric"
+            resp = requests.get(forecast_url, timeout=5).json()
+            
+            # Find closest timeframe
+            best_match = None
+            min_diff = float('inf')
+            
+            for entry in resp.get('list', []):
+                dt = datetime.fromtimestamp(entry['dt'])
+                diff = abs((dt - date_obj).total_seconds())
+                if diff < min_diff:
+                    min_diff = diff
+                    best_match = entry
+            
+            if best_match:
+                return {
+                    "temp": best_match['main']['temp'],
+                    "humidity": best_match['main']['humidity'] / 100.0,
+                    "wind": best_match['wind']['speed'],
+                    "precip": best_match.get('rain', {}).get('3h', 0) / 3.0, # Approximate mm/h
+                    "condition": best_match['weather'][0]['main'],
+                    "source": "OpenWeather API (Forecast)"
+                }
+        
+        # 3. Fallback to Current Weather for calibration factor
+        curr_url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric"
+        curr_resp = requests.get(curr_url, timeout=5).json()
+        return {
+            "temp": curr_resp['main']['temp'],
+            "humidity": curr_resp['main']['humidity'] / 100.0,
+            "condition": curr_resp['weather'][0]['main'],
+            "source": "OpenWeather API (Baseline)"
+        }
+    except Exception as e:
+        print(f"API Error: {e}")
+        return None
 
 
 def calculate_aqi(wind, humid, is_rainy):
@@ -172,34 +232,59 @@ def predict_weather(req: PredictRequest):
     day_sin = math.sin(2 * math.pi * day_of_year / 365)
     day_cos = math.cos(2 * math.pi * day_of_year / 365)
 
+    # 1. API Calibration / Fetch
+    api_data = get_weather_from_api(req.district, date_obj)
+    
+    # 2. Calculate ML Prediction
     features = np.array([[
         saudi_air, saudi_surface, saudi_humid, saudi_wind, saudi_precip,
         month, day_of_year, month_sin, month_cos, day_sin, day_cos
     ]])
     features_scaled = scaler_X.transform(features)
-
-    # Predict
     pred_scaled = model.predict(features_scaled)
     pred = scaler_y.inverse_transform(pred_scaled)[0]
 
-    # targets: ['india_air_temp', 'india_surface_temp', 'india_humidity', 'india_wind_speed', 'india_precipitation']
     avg_temp_k = float(pred[0])
-    avg_surface_k = float(pred[1])
+    avg_precip = float(max(0, pred[4]))
     avg_humid = float(pred[2])
     avg_wind = float(pred[3])
-    avg_precip = float(max(0, pred[4]))
-
     avg_temp_c = kelvin_to_celsius(avg_temp_k)
 
-    # Add geographic variation based on state/district
+    # 3. Apply API Logic
+    source = "ML Model (Calibrated)"
+    if api_data:
+        if api_data.get("source") == "OpenWeather API (Forecast)":
+            # If forecast is available, prioritize it
+            avg_temp_c = api_data['temp']
+            avg_humid = api_data['humidity']
+            avg_wind = api_data['wind']
+            avg_precip = api_data['precip']
+            source = "OpenWeather API"
+        else:
+            # Use current API data as a bias towards the ML model
+            # e.g. adjust ML temp based on current delta
+            api_curr_temp = api_data['temp']
+            # Simple bias: 30% API influence, 70% ML
+            avg_temp_c = (avg_temp_c * 0.7) + (api_curr_temp * 0.3)
+
+    # Add geographic variation
     geo_offset = (len(req.state) + len(req.district)) / 10 - 1.5
     avg_temp_c += geo_offset
 
-    # Determine weather condition
-    day_condition = get_condition(avg_temp_c, avg_precip, avg_humid, avg_wind)
+    # Seasonal variation if not near today
+    if not api_data or api_data.get("source") != "OpenWeather API":
+        if month in [3, 4, 5, 6]: avg_temp_c += 4 # Summer
+        elif month in [11, 12, 1]: avg_temp_c -= 3 # Winter
+
+    # Determine condition
+    if api_data and api_data.get("source") == "OpenWeather API":
+        day_condition = api_data['condition']
+    else:
+        day_condition = get_condition(avg_temp_c, avg_precip, avg_humid, avg_wind)
+    
     aqi = calculate_aqi(avg_wind, avg_humid, day_condition in ["Rainy", "Thunderstorm"])
 
-    # Generate hourly breakdown with diurnal curve
+    # Generate hourly breakdown
     hourly = []
     times = ["1 AM", "4 AM", "7 AM", "10 AM", "1 PM", "4 PM", "7 PM", "10 PM"]
     temp_curve = [-4, -5, -2, +3, +6, +5, +1, -3]
@@ -207,21 +292,24 @@ def predict_weather(req: PredictRequest):
     for t, c in zip(times, temp_curve):
         h_temp = avg_temp_c + c
         h_precip = avg_precip * (1.2 if c > 0 else 0.4)
-        h_cond = get_condition(h_temp, h_precip, avg_humid, avg_wind)
         hourly.append({
             "time": t,
-            "temp": round(float(h_temp), 1),
-            "condition": h_cond
+            "temp": round(h_temp, 1),
+            "condition": "Rainy" if h_precip > 2 else day_condition,
+            "precip": round(h_precip, 2)
         })
 
     return {
         "summary": {
+            "date": req.date,
+            "location": f"{req.district}, {req.state}",
             "condition": day_condition,
             "temperature": round(float(avg_temp_c), 1),
             "precipitation": round(float(min(100, avg_precip)), 1),
             "humidity": round(float(avg_humid * 100) if avg_humid < 1 else float(avg_humid), 1),
             "wind_speed": round(float(avg_wind * 3.6), 1),
-            "aqi": int(aqi)
+            "aqi": int(aqi),
+            "prediction_source": source
         },
         "hourly": hourly
     }

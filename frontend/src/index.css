@@ -366,3 +366,19 @@ input:focus, select:focus {
   margin-bottom: 0.25rem;
 }
 
+.source-badge {
+  display: inline-block;
+  margin-left: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  background: rgba(56, 189, 248, 0.2);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  vertical-align: middle;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+
