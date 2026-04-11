@@ -6,8 +6,11 @@
       "use": "@vercel/python"
     },
     {
-      "src": "standalone_weather_app.html",
-      "use": "@vercel/static"
+      "src": "frontend/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
     }
   ],
   "routes": [
@@ -17,7 +20,15 @@
     },
     {
       "src": "/(.*)",
-      "dest": "standalone_weather_app.html"
+      "dest": "/frontend/$1",
+      "continue": true
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/frontend/index.html"
     }
   ]
 }
