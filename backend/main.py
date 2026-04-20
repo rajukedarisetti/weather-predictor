@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "OPENWEATHER_API_KEY_PLACEHOLDER")
+OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "")
 
 app = FastAPI(title="Indian Weather Predictor API")
 
