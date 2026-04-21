@@ -4,7 +4,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import joblib
-import pandas as pd
 import numpy as np
 from datetime import datetime
 import os
@@ -12,6 +11,14 @@ import math
 import requests
 from datetime import timedelta
 from dotenv import load_dotenv
+
+# pandas/openpyxl are optional — only needed locally for Excel data loading
+try:
+    import pandas as pd
+    PANDAS_AVAILABLE = True
+except ImportError:
+    pd = None
+    PANDAS_AVAILABLE = False
 
 # Load environment variables
 load_dotenv()
@@ -58,58 +65,64 @@ else:
     scaler_y = None
     print("WARNING: Models not found. Please run ml_pipeline.py first.")
 
-# Load Saudi Arabia daily data for feature lookup
+# Load Saudi Arabia daily data for feature lookup (only if pandas is available + file exists)
 SAUDI_DATA_PATH = os.path.join(PROJECT_DIR, "saudi_arabia_daily_climate_2015_2026 (1).xlsx")
 saudi_daily_df = None
-if os.path.exists(SAUDI_DATA_PATH):
-    _df = pd.read_excel(SAUDI_DATA_PATH, skiprows=2, header=None)
-    _cols = _df.iloc[0].tolist()
-    _df.columns = _cols
-    _df = _df[1:].reset_index(drop=True)
-    _df.rename(columns={
-        'Date': 'date',
-        'Air Temperature (K)': 'saudi_air_temp',
-        'Surface Temperature (K)': 'saudi_surface_temp',
-        'Relative Humidity (%)': 'saudi_humidity',
-        'Wind Speed (m/s)': 'saudi_wind_speed',
-        'Total Precipitation (m)': 'saudi_precipitation'
-    }, inplace=True)
-    _df['date'] = pd.to_datetime(_df['date'])
-    for col in ['saudi_air_temp', 'saudi_surface_temp', 'saudi_humidity', 'saudi_wind_speed', 'saudi_precipitation']:
-        _df[col] = pd.to_numeric(_df[col], errors='coerce')
-    _df.dropna(inplace=True)
-    _df['month'] = _df['date'].dt.month
-    _df['day_of_year'] = _df['date'].dt.dayofyear
-    saudi_daily_df = _df
-    print(f"Saudi daily data loaded: {saudi_daily_df.shape[0]} records")
+if PANDAS_AVAILABLE and os.path.exists(SAUDI_DATA_PATH):
+    try:
+        _df = pd.read_excel(SAUDI_DATA_PATH, skiprows=2, header=None)
+        _cols = _df.iloc[0].tolist()
+        _df.columns = _cols
+        _df = _df[1:].reset_index(drop=True)
+        _df.rename(columns={
+            'Date': 'date',
+            'Air Temperature (K)': 'saudi_air_temp',
+            'Surface Temperature (K)': 'saudi_surface_temp',
+            'Relative Humidity (%)': 'saudi_humidity',
+            'Wind Speed (m/s)': 'saudi_wind_speed',
+            'Total Precipitation (m)': 'saudi_precipitation'
+        }, inplace=True)
+        _df['date'] = pd.to_datetime(_df['date'])
+        for col in ['saudi_air_temp', 'saudi_surface_temp', 'saudi_humidity', 'saudi_wind_speed', 'saudi_precipitation']:
+            _df[col] = pd.to_numeric(_df[col], errors='coerce')
+        _df.dropna(inplace=True)
+        _df['month'] = _df['date'].dt.month
+        _df['day_of_year'] = _df['date'].dt.dayofyear
+        saudi_daily_df = _df
+        print(f"Saudi daily data loaded: {saudi_daily_df.shape[0]} records")
+    except Exception as e:
+        print(f"Could not load Saudi data: {e}. Using fallback monthly averages.")
 
 # Load India historical data for accurate fallback baseline
 INDIA_DATA_PATH = os.path.join(PROJECT_DIR, "india_daily_climate_2015_2026.xlsx")
 india_daily_df = None
-if os.path.exists(INDIA_DATA_PATH):
-    _df = pd.read_excel(INDIA_DATA_PATH, skiprows=2, header=None)
-    _cols = _df.iloc[0].tolist()
-    _df.columns = _cols
-    _df = _df[1:].reset_index(drop=True)
-    _df.rename(columns={
-        'Date': 'date',
-        'Air Temperature (K)': 'india_air_temp',
-        'Relative Humidity (%)': 'india_humidity',
-        'Wind Speed (m/s)': 'india_wind_speed',
-        'Precipitation (mm)': 'india_precipitation'
-    }, inplace=True)
-    _df['date'] = pd.to_datetime(_df['date'])
-    for col in ['india_air_temp', 'india_humidity', 'india_wind_speed', 'india_precipitation']:
-        _df[col] = pd.to_numeric(_df[col], errors='coerce')
-    _df.dropna(inplace=True)
-    _df['day_of_year'] = _df['date'].dt.dayofyear
-    # Group by DOY for historical averaging
-    india_daily_df = _df.groupby('day_of_year').agg({
-        'india_precipitation': 'mean',
-        'india_humidity': 'mean',
-        'india_wind_speed': 'mean'
-    }).reset_index()
-    print(f"India historical daily data loaded: {india_daily_df.shape[0]} DOY records")
+if PANDAS_AVAILABLE and os.path.exists(INDIA_DATA_PATH):
+    try:
+        _df = pd.read_excel(INDIA_DATA_PATH, skiprows=2, header=None)
+        _cols = _df.iloc[0].tolist()
+        _df.columns = _cols
+        _df = _df[1:].reset_index(drop=True)
+        _df.rename(columns={
+            'Date': 'date',
+            'Air Temperature (K)': 'india_air_temp',
+            'Relative Humidity (%)': 'india_humidity',
+            'Wind Speed (m/s)': 'india_wind_speed',
+            'Precipitation (mm)': 'india_precipitation'
+        }, inplace=True)
+        _df['date'] = pd.to_datetime(_df['date'])
+        for col in ['india_air_temp', 'india_humidity', 'india_wind_speed', 'india_precipitation']:
+            _df[col] = pd.to_numeric(_df[col], errors='coerce')
+        _df.dropna(inplace=True)
+        _df['day_of_year'] = _df['date'].dt.dayofyear
+        # Group by DOY for historical averaging
+        india_daily_df = _df.groupby('day_of_year').agg({
+            'india_precipitation': 'mean',
+            'india_humidity': 'mean',
+            'india_wind_speed': 'mean'
+        }).reset_index()
+        print(f"India historical daily data loaded: {india_daily_df.shape[0]} DOY records")
+    except Exception as e:
+        print(f"Could not load India data: {e}. Condition logic will use ML output only.")
 
 
 class PredictRequest(BaseModel):
