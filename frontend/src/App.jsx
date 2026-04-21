@@ -138,7 +138,7 @@ function App() {
   const [weatherData, setWeatherData] = useState(null);
   const [modelInfo, setModelInfo] = useState(null);
   const [seasonalTrends, setSeasonalTrends] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [theme, setTheme] = useState('dark');
 
@@ -497,7 +497,7 @@ function App() {
                 <MapPin size={20} /> Setup Prediction
               </h2>
 
-              <form onSubmit={handlePredict}>
+              <form /*onSubmit={handlePredict}*/>
                 <div className="form-group">
                   <label>Select State in India</label>
                   <select
@@ -543,7 +543,7 @@ function App() {
 
                 {error && <div style={{ color: '#f87171', marginBottom: '1rem', fontSize: '0.9rem' }}>{error}</div>}
 
-                <button type="submit" className="btn-primary" disabled={loading}>
+                <button type="submit" className="btn-primary" onClick={handlePredict} disabled={loading}>
                   {loading ? 'Predicting...' : 'Generate Prediction'}
                 </button>
               </form>
